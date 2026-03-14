@@ -45,4 +45,4 @@ def filter_new(chunks) -> list:
     seen.update(new_hashes)
     _save_hashes(seen)
     print(f"   Dedup: {len(chunks)} chunks → {len(new_chunks)} new, {len(chunks)-len(new_chunks)} skipped")
-    return new_chunkss
+    return new_chunks

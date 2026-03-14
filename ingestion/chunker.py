@@ -15,7 +15,7 @@ class Chunk:
             self.chunk_id = hashlib.md5(self.text.encode()).hexdigest()
 
 
-def chunk_text(text: str, metadata: dict, chunk_size: int = 1000, overlap: int = 200) -> List[Chunk]:
+def chunk_text(text: str, metadata: dict, chunk_size: int = 150, overlap: int = 30) -> List[Chunk]:
     """Split text into overlapping chunks with metadata."""
     if not text or not text.strip():
         return []
