@@ -4,7 +4,7 @@ import FileUpload from './FileUpload'
 import KnowledgeBase from './KnowledgeBase'
 import Analytics from './Analytics'
 
-export default function Sidebar() {
+export default function Sidebar({ onClose }) {
   const [health, setHealth] = useState(null)
   const [tab, setTab] = useState('upload')
   const [refreshKB, setRefreshKB] = useState(0)
@@ -24,65 +24,102 @@ export default function Sidebar() {
   }, [])
 
   const tabs = [
-    { key: 'upload', label: 'Upload' },
-    { key: 'sources', label: 'Sources' },
-    { key: 'analytics', label: '📊' },
+    { key: 'upload', label: '⬆', title: 'Upload' },
+    { key: 'sources', label: '📚', title: 'Sources' },
+    { key: 'analytics', label: '📊', title: 'Analytics' },
   ]
 
   return (
     <div style={{
-      width: '310px', minWidth: '310px',
-      background: '#080810',
-      borderRight: '1px solid #1a1a2e',
+      width: '300px', minWidth: '300px',
       display: 'flex', flexDirection: 'column',
-      height: '100vh', overflow: 'hidden'
+      height: '100vh', overflow: 'hidden',
+      background: 'rgba(4, 20, 36, 0.95)',
+      borderRight: '1px solid var(--border)',
+      backdropFilter: 'blur(20px)'
     }}>
       {/* Header */}
-      <div style={{ padding: '20px 16px 14px', borderBottom: '1px solid #1a1a2e' }}>
-        <div style={{ fontFamily: 'monospace', fontSize: '9px', color: '#444', letterSpacing: '2px', marginBottom: '4px' }}>
-          PERSONAL AI ASSISTANT
+      <div style={{
+        padding: '16px',
+        borderBottom: '1px solid var(--border)',
+        background: 'linear-gradient(180deg, rgba(13,115,119,0.15) 0%, transparent 100%)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+          <div>
+            <div style={{ fontSize: '9px', letterSpacing: '3px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono', marginBottom: '3px' }}>
+              KNOWLEDGE CORE
+            </div>
+            <div style={{ fontSize: '17px', fontWeight: 800, color: 'var(--text-primary)' }}>
+              Neural Base
+            </div>
+          </div>
+          <button onClick={onClose} style={{
+            background: 'none', border: '1px solid var(--border)',
+            borderRadius: '8px', padding: '5px 8px',
+            color: 'var(--text-muted)', cursor: 'pointer', fontSize: '12px'
+          }}>
+            ✕
+          </button>
         </div>
-        <div style={{ fontSize: '16px', fontWeight: 700, color: '#e0e0f0' }}>
-          Knowledge Base
-        </div>
+
+        {/* Status pills */}
         {health && (
-          <div style={{ display: 'flex', gap: '10px', marginTop: '10px', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '10px', color: health.ollama ? '#4ade80' : '#f87171', fontFamily: 'monospace' }}>
-              ● LLM {health.ollama ? 'ON' : 'OFF'}
-            </span>
-            <span style={{ fontSize: '10px', color: health.vector_db ? '#4ade80' : '#f87171', fontFamily: 'monospace' }}>
-              ● DB {health.vector_db ? 'ON' : 'OFF'}
-            </span>
-            <span style={{ fontSize: '10px', color: '#60a5fa', fontFamily: 'monospace' }}>
-              {health.total_documents} chunks
-            </span>
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+            {[
+              { label: 'LLM', ok: health.ollama },
+              { label: 'DB', ok: health.vector_db },
+            ].map(s => (
+              <div key={s.label} style={{
+                display: 'flex', alignItems: 'center', gap: '4px',
+                background: s.ok ? 'rgba(0,255,136,0.08)' : 'rgba(255,107,107,0.08)',
+                border: `1px solid ${s.ok ? 'rgba(0,255,136,0.2)' : 'rgba(255,107,107,0.2)'}`,
+                borderRadius: '20px', padding: '3px 10px'
+              }}>
+                <div style={{
+                  width: '5px', height: '5px', borderRadius: '50%',
+                  background: s.ok ? '#00ff88' : '#ff6b6b',
+                  boxShadow: `0 0 4px ${s.ok ? '#00ff88' : '#ff6b6b'}`
+                }} />
+                <span style={{ fontSize: '10px', color: s.ok ? '#00ff88' : '#ff6b6b', fontFamily: 'JetBrains Mono' }}>
+                  {s.label}
+                </span>
+              </div>
+            ))}
+            <div style={{
+              background: 'rgba(0,212,224,0.08)',
+              border: '1px solid rgba(0,212,224,0.2)',
+              borderRadius: '20px', padding: '3px 10px'
+            }}>
+              <span style={{ fontSize: '10px', color: 'var(--teal-bright)', fontFamily: 'JetBrains Mono' }}>
+                {health.total_documents} chunks
+              </span>
+            </div>
           </div>
         )}
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', borderBottom: '1px solid #1a1a2e' }}>
+      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
         {tabs.map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)} style={{
-            flex: 1, padding: '10px 4px',
-            background: tab === t.key ? '#0f0f1a' : 'transparent',
-            border: 'none',
-            borderBottom: tab === t.key ? '2px solid #60a5fa' : '2px solid transparent',
-            color: tab === t.key ? '#60a5fa' : '#555',
-            fontSize: '11px', fontFamily: 'monospace',
-            letterSpacing: '1px', cursor: 'pointer',
-            textTransform: 'uppercase'
+          <button key={t.key} onClick={() => setTab(t.key)} title={t.title} style={{
+            flex: 1, padding: '11px 4px',
+            background: 'none', border: 'none',
+            borderBottom: `2px solid ${tab === t.key ? 'var(--teal-bright)' : 'transparent'}`,
+            color: tab === t.key ? 'var(--teal-bright)' : 'var(--text-muted)',
+            fontSize: tab === t.key ? '16px' : '15px',
+            cursor: 'pointer', transition: 'all 0.2s'
           }}>
             {t.label}
+            <div style={{ fontSize: '9px', fontFamily: 'JetBrains Mono', marginTop: '2px', opacity: 0.7 }}>
+              {t.title}
+            </div>
           </button>
         ))}
       </div>
 
-      {/* Tab content */}
-      <div style={{ flex: 1, overflowY: 'auto' }}>
-        {tab === 'upload' && (
-          <FileUpload onIngested={() => setRefreshKB(r => r + 1)} />
-        )}
+      {/* Content */}
+      <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+        {tab === 'upload' && <FileUpload onIngested={() => setRefreshKB(r => r + 1)} />}
         {tab === 'sources' && <KnowledgeBase refresh={refreshKB} />}
         {tab === 'analytics' && <Analytics />}
       </div>

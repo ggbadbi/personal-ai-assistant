@@ -2,53 +2,42 @@ import { useState, useCallback, useRef } from 'react'
 import { sendMessage } from '../api/client'
 
 export function useChat() {
-  const [messages, setMessages] = useState([
-    {
-      role: 'assistant',
-      content: "Hello! I'm your Personal AI Assistant. Upload documents using the panel on the left — then ask me anything about your knowledge base.",
-      sources: [],
-      id: 0
-    }
-  ])
+  const [messages, setMessages] = useState([{
+    role: 'assistant',
+    content: "Welcome to your Neural Knowledge Base 🌊\n\nUpload documents, YouTube videos, or URLs — then ask me anything. I'll answer from your personal knowledge with source citations and timestamps.",
+    sources: [], id: 0
+  }])
   const [loading, setLoading] = useState(false)
+  const [pinnedMessages, setPinnedMessages] = useState([])
+  const [sessions, setSessions] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('chat_sessions') || '[]') } catch { return [] }
+  })
   const sessionId = useRef('session_' + Math.random().toString(36).slice(2, 9))
   const msgCounter = useRef(1)
 
   const send = useCallback(async (text, editFromIndex = null) => {
-    if (!text || !text.trim() || loading) return
-
-    const userMsg = {
-      role: 'user',
-      content: text,
-      sources: [],
-      id: msgCounter.current++
-    }
-
-    // If editing — remove all messages from that index onwards
+    if (!text?.trim() || loading) return
+    const userMsg = { role: 'user', content: text, sources: [], id: msgCounter.current++ }
     if (editFromIndex !== null) {
       setMessages(prev => [...prev.slice(0, editFromIndex), userMsg])
     } else {
       setMessages(prev => [...prev, userMsg])
     }
-
     setLoading(true)
-
     try {
       const res = await sendMessage(text, sessionId.current)
-      const data = res.data
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: data.answer || 'No response',
-        sources: data.sources || [],
-        chunks_used: data.chunks_used,
+        content: res.data.answer || 'No response',
+        sources: res.data.sources || [],
+        chunks_used: res.data.chunks_used,
         id: msgCounter.current++
       }])
     } catch (e) {
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: '❌ Error: ' + (e.response?.data?.detail || e.message),
-        sources: [],
-        id: msgCounter.current++
+        content: '❌ ' + (e.response?.data?.detail || e.message),
+        sources: [], id: msgCounter.current++
       }])
     } finally {
       setLoading(false)
@@ -58,11 +47,31 @@ export function useChat() {
   const clearChat = useCallback(() => {
     setMessages([{
       role: 'assistant',
-      content: "Chat cleared. Ask me anything about your knowledge base!",
-      sources: [],
-      id: msgCounter.current++
+      content: 'Chat cleared 🌊 Ask me anything about your knowledge base!',
+      sources: [], id: msgCounter.current++
     }])
   }, [])
 
-  return { messages, loading, send, clearChat }
+  const pinMessage = useCallback((msg) => {
+    setPinnedMessages(prev => {
+      const exists = prev.find(m => m.id === msg.id)
+      if (exists) return prev.filter(m => m.id !== msg.id)
+      return [...prev, msg]
+    })
+  }, [])
+
+  const saveSession = useCallback((name) => {
+    const session = { name, messages, timestamp: Date.now(), id: Date.now() }
+    setSessions(prev => {
+      const updated = [...prev, session]
+      try { localStorage.setItem('chat_sessions', JSON.stringify(updated.slice(-10))) } catch {}
+      return updated
+    })
+  }, [messages])
+
+  const loadSession = useCallback((session) => {
+    setMessages(session.messages)
+  }, [])
+
+  return { messages, loading, send, clearChat, pinnedMessages, pinMessage, sessions, saveSession, loadSession }
 }
