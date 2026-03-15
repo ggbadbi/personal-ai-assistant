@@ -1,6 +1,10 @@
 import axios from 'axios'
 
-const api = axios.create({ baseURL: 'http://localhost:8000' })
+const BASE_URL = window.location.hostname === 'localhost' 
+  ? 'http://localhost:8000'
+  : `http://10.139.8.26:8000`
+
+const api = axios.create({ baseURL: BASE_URL })
 
 export const sendMessage = (message, session_id) =>
   api.post('/chat', { message, session_id })

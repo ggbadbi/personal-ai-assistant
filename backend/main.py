@@ -20,7 +20,7 @@ from ingestion.youtube_loader import ingest_youtube
 from ingestion.gmail_connector import ingest_gmail
 from backend.digest import generate_digest
 from backend.study import generate_flashcards, generate_quiz, generate_summary_notes
-
+from ingestion.notion_connector import ingest_notion
 load_dotenv()
 
 app = FastAPI(title="Personal AI Assistant", version="1.0.0")
@@ -188,6 +188,7 @@ def ingest_gmail_endpoint(payload: dict = {}):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
 @app.get("/ingest/gmail/status")
 def gmail_status():
     """Check if Gmail is connected."""
@@ -198,6 +199,37 @@ def gmail_status():
         "connected": os.path.exists("token.json")
     }
 
+@app.post("/ingest/notion")
+def ingest_notion_endpoint(payload: dict = {}):
+    """Ingest all Notion pages and databases."""
+    page_id = payload.get("page_id", None)
+    try:
+        chunks, page_count, db_count = ingest_notion(specific_page_id=page_id)
+        added = add_chunks(chunks)
+        log_ingestion("Notion", "notion", added, "notion")
+        return {
+            "status": "success",
+            "pages_ingested": page_count,
+            "databases_ingested": db_count,
+            "chunks_added": added
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        import traceback
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/ingest/notion/status")
+def notion_status():
+    """Check if Notion token is configured."""
+    token = os.getenv("NOTION_TOKEN")
+    return {
+        "connected": bool(token),
+        "token_set": bool(token)
+    }
+    
 @app.post("/ingest/reupload")
 async def reupload_source(source_name: str, file: UploadFile = File(...)):
     """Delete old source and re-ingest with new file."""

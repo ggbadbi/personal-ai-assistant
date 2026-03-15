@@ -8,21 +8,21 @@ export default function FileUpload({ onIngested }) {
   const [dragging, setDragging] = useState(false)
   const [url, setUrl] = useState('')
   const [ytUrl, setYtUrl] = useState('')
+  const [notionPageId, setNotionPageId] = useState('')
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(false)
   const [expanded, setExpanded] = useState(null)
   const [inputTab, setInputTab] = useState('file')
   const [gmailDays, setGmailDays] = useState(30)
   const [gmailMax, setGmailMax] = useState(100)
-  const [gmailStatus, setGmailStatus] = useState(null)
 
   const inputTabStyle = (key) => ({
-    flex: 1, padding: '7px 2px',
+    flex: 1, padding: '6px 1px',
     background: inputTab === key ? 'rgba(0,212,224,0.1)' : 'transparent',
     border: 'none',
     borderBottom: `2px solid ${inputTab === key ? 'var(--teal-bright)' : 'transparent'}`,
     color: inputTab === key ? 'var(--teal-bright)' : 'var(--text-muted)',
-    fontSize: '10px', cursor: 'pointer',
+    fontSize: '9px', cursor: 'pointer',
     fontFamily: 'JetBrains Mono', transition: 'all 0.2s'
   })
 
@@ -90,6 +90,25 @@ export default function FileUpload({ onIngested }) {
     setLoading(false)
   }
 
+  const handleNotion = async () => {
+    setLoading(true); setResults([])
+    try {
+      const res = await api.post('/ingest/notion', {
+        page_id: notionPageId.trim() || null
+      })
+      setResults([{
+        name: 'Notion Workspace', icon: '📓', status: 'success',
+        chunks: res.data.chunks_added,
+        summary: `${res.data.pages_ingested} pages + ${res.data.databases_ingested} databases → ${res.data.chunks_added} chunks`
+      }])
+      setNotionPageId('')
+      onIngested?.()
+    } catch (e) {
+      setResults([{ name: 'Notion', status: 'error', error: e.response?.data?.detail || e.message, icon: '📓' }])
+    }
+    setLoading(false)
+  }
+
   const inputStyle = {
     width: '100%', background: 'rgba(0,212,224,0.04)',
     border: '1px solid rgba(0,212,224,0.15)', borderRadius: '8px',
@@ -99,11 +118,23 @@ export default function FileUpload({ onIngested }) {
 
   const actionBtn = (color = '#00d4e0', disabled = false) => ({
     width: '100%', padding: '10px',
-    background: disabled ? 'rgba(0,0,0,0.2)' : `rgba(${color === '#00d4e0' ? '0,212,224' : color === '#4ade80' ? '74,222,128' : color === '#f87171' ? '248,113,113' : '0,212,224'},0.08)`,
+    background: disabled ? 'rgba(0,0,0,0.2)' : `rgba(${
+      color === '#00d4e0' ? '0,212,224' :
+      color === '#4ade80' ? '74,222,128' :
+      color === '#f87171' ? '248,113,113' :
+      color === '#a78bfa' ? '167,139,250' : '0,212,224'
+    },0.08)`,
     border: `1px solid ${disabled ? 'rgba(255,255,255,0.05)' : `${color}33`}`,
     borderRadius: '8px', color: disabled ? 'var(--text-muted)' : color,
     fontSize: '13px', cursor: disabled ? 'not-allowed' : 'pointer',
     fontFamily: 'Outfit', fontWeight: 600, transition: 'all 0.2s'
+  })
+
+  const infoBox = (color = '0,212,224') => ({
+    background: `rgba(${color},0.04)`,
+    border: `1px solid rgba(${color},0.15)`,
+    borderRadius: '8px', padding: '10px 12px',
+    fontSize: '11px', color: 'var(--text-muted)', lineHeight: '1.7'
   })
 
   return (
@@ -112,13 +143,14 @@ export default function FileUpload({ onIngested }) {
         // INGEST KNOWLEDGE
       </div>
 
-      {/* Input tabs */}
+      {/* Input tabs — now 5 tabs */}
       <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
         {[
           { key: 'file', label: '📄 FILE' },
           { key: 'url', label: '🌐 URL' },
           { key: 'youtube', label: '📺 YT' },
           { key: 'gmail', label: '📧 MAIL' },
+          { key: 'notion', label: '📓 NOTION' },
         ].map(t => (
           <button key={t.key} onClick={() => setInputTab(t.key)} style={inputTabStyle(t.key)}>
             {t.label}
@@ -174,11 +206,7 @@ export default function FileUpload({ onIngested }) {
       {/* YouTube */}
       {inputTab === 'youtube' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <div style={{
-            background: 'rgba(248,113,113,0.04)', border: '1px solid rgba(248,113,113,0.15)',
-            borderRadius: '8px', padding: '10px 12px',
-            fontSize: '11px', color: 'var(--text-muted)', lineHeight: '1.6'
-          }}>
+          <div style={infoBox('248,113,113')}>
             📺 Paste any YouTube URL. Captions fetched automatically — Whisper used as fallback.
           </div>
           <input value={ytUrl} onChange={e => setYtUrl(e.target.value)}
@@ -193,16 +221,11 @@ export default function FileUpload({ onIngested }) {
       {/* Gmail */}
       {inputTab === 'gmail' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <div style={{
-            background: 'rgba(0,212,224,0.04)', border: '1px solid rgba(0,212,224,0.15)',
-            borderRadius: '8px', padding: '12px',
-            fontSize: '11px', color: 'var(--text-muted)', lineHeight: '1.7'
-          }}>
+          <div style={infoBox('0,212,224')}>
             📧 Connects to Gmail via OAuth2.<br/>
             Requires <code style={{ color: 'var(--teal-bright)', fontFamily: 'JetBrains Mono' }}>credentials.json</code> in project root.<br/>
             <span style={{ color: '#00ff88' }}>Read-only</span> — never sends or modifies emails.
           </div>
-
           <div style={{ display: 'flex', gap: '8px' }}>
             <select value={gmailDays} onChange={e => setGmailDays(Number(e.target.value))} style={{
               flex: 1, background: 'var(--ocean-surface)', border: '1px solid var(--border)',
@@ -225,13 +248,34 @@ export default function FileUpload({ onIngested }) {
               <option value={500}>500 emails</option>
             </select>
           </div>
-
           <button onClick={handleGmail} disabled={loading} style={actionBtn('#00d4e0', loading)}>
             {loading ? '⚙️ Connecting to Gmail...' : '📧 Connect & Ingest Gmail'}
           </button>
-
           <div style={{ fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono', textAlign: 'center' }}>
             First run opens browser for Google sign-in
+          </div>
+        </div>
+      )}
+
+      {/* Notion */}
+      {inputTab === 'notion' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div style={infoBox('167,139,250')}>
+            📓 Syncs all Notion pages and databases your integration can access.<br/>
+            Set <code style={{ color: '#a78bfa', fontFamily: 'JetBrains Mono' }}>NOTION_TOKEN</code> in <code style={{ color: '#a78bfa', fontFamily: 'JetBrains Mono' }}>.env</code><br/>
+            Then share pages with your integration inside Notion.
+          </div>
+          <input
+            value={notionPageId}
+            onChange={e => setNotionPageId(e.target.value)}
+            placeholder="Optional: specific page ID (leave empty for all)..."
+            style={inputStyle}
+          />
+          <button onClick={handleNotion} disabled={loading} style={actionBtn('#a78bfa', loading)}>
+            {loading ? '⚙️ Syncing Notion...' : '📓 Sync All Notion Pages'}
+          </button>
+          <div style={{ fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono', textAlign: 'center' }}>
+            Leave empty to sync everything accessible
           </div>
         </div>
       )}

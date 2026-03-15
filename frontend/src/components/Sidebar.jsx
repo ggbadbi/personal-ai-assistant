@@ -5,7 +5,7 @@ import KnowledgeBase from './KnowledgeBase'
 import Analytics from './Analytics'
 import StudyMode from './StudyMode'
 
-export default function Sidebar({ onClose }) {
+export default function Sidebar({ onClose, isMobile = false }) {
   const [health, setHealth] = useState(null)
   const [tab, setTab] = useState('upload')
   const [refreshKB, setRefreshKB] = useState(0)
@@ -33,10 +33,11 @@ export default function Sidebar({ onClose }) {
 
   return (
     <div style={{
-      width: '300px', minWidth: '300px',
+      width: isMobile ? '280px' : '300px',
+      minWidth: isMobile ? '280px' : '300px',
       display: 'flex', flexDirection: 'column',
       height: '100vh', overflow: 'hidden',
-      background: 'rgba(4, 20, 36, 0.95)',
+      background: 'rgba(4,20,36,0.98)',
       borderRight: '1px solid var(--border)',
       backdropFilter: 'blur(20px)'
     }}>
@@ -77,24 +78,12 @@ export default function Sidebar({ onClose }) {
                 border: `1px solid ${s.ok ? 'rgba(0,255,136,0.2)' : 'rgba(255,107,107,0.2)'}`,
                 borderRadius: '20px', padding: '3px 10px'
               }}>
-                <div style={{
-                  width: '5px', height: '5px', borderRadius: '50%',
-                  background: s.ok ? '#00ff88' : '#ff6b6b',
-                  boxShadow: `0 0 4px ${s.ok ? '#00ff88' : '#ff6b6b'}`
-                }} />
-                <span style={{ fontSize: '10px', color: s.ok ? '#00ff88' : '#ff6b6b', fontFamily: 'JetBrains Mono' }}>
-                  {s.label}
-                </span>
+                <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: s.ok ? '#00ff88' : '#ff6b6b', boxShadow: `0 0 4px ${s.ok ? '#00ff88' : '#ff6b6b'}` }} />
+                <span style={{ fontSize: '10px', color: s.ok ? '#00ff88' : '#ff6b6b', fontFamily: 'JetBrains Mono' }}>{s.label}</span>
               </div>
             ))}
-            <div style={{
-              background: 'rgba(0,212,224,0.08)',
-              border: '1px solid rgba(0,212,224,0.2)',
-              borderRadius: '20px', padding: '3px 10px'
-            }}>
-              <span style={{ fontSize: '10px', color: 'var(--teal-bright)', fontFamily: 'JetBrains Mono' }}>
-                {health.total_documents} chunks
-              </span>
+            <div style={{ background: 'rgba(0,212,224,0.08)', border: '1px solid rgba(0,212,224,0.2)', borderRadius: '20px', padding: '3px 10px' }}>
+              <span style={{ fontSize: '10px', color: 'var(--teal-bright)', fontFamily: 'JetBrains Mono' }}>{health.total_documents} chunks</span>
             </div>
           </div>
         )}
@@ -111,9 +100,7 @@ export default function Sidebar({ onClose }) {
             fontSize: '14px', cursor: 'pointer', transition: 'all 0.2s'
           }}>
             {t.label}
-            <div style={{ fontSize: '8px', fontFamily: 'JetBrains Mono', marginTop: '2px', opacity: 0.7 }}>
-              {t.title}
-            </div>
+            <div style={{ fontSize: '8px', fontFamily: 'JetBrains Mono', marginTop: '2px', opacity: 0.7 }}>{t.title}</div>
           </button>
         ))}
       </div>
