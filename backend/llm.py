@@ -15,19 +15,25 @@ def ask(prompt: str, context: str, history: list = []) -> str:
     for turn in history[:-2] if len(history) > 2 else []:
         messages.append({"role": turn["role"], "content": turn["content"]})
 
-    user_message = f"""Here is relevant content from my personal documents:
+    user_message = f"""You are analyzing the user's personal knowledge base which contains documents, notes, and video transcripts in multiple languages including English, Hindi, Sindhi, and Punjabi.
 
----DOCUMENTS---
+KNOWLEDGE BASE CONTENT:
+===
 {context}
----END DOCUMENTS---
+===
 
-Using the documents above, answer this: {prompt}
+CONVERSATION TASK: {prompt}
 
-Rules:
-- Answer directly from the documents
-- If asked a follow-up, use both the documents AND our conversation history
-- Never say you lack access to notes — the content is right above
-- Be specific and cite what you found"""
+STRICT RULES:
+1. Answer ONLY from the content above — never from general knowledge
+2. For songs/lyrics: identify the EXACT words, names, and references present in the transcript
+3. For Sufi/devotional songs: look for saint names (Jhulelal, Lal Shahbaz, etc), religious terms, and community references
+4. If a word appears in Devanagari/Hindi script but refers to Sindhi culture — say so explicitly
+5. Count exact occurrences when asked "how many times"
+6. For follow-up questions like "in the whole song" — search ALL sources not just one
+7. Quote the EXACT text from the transcript as evidence
+8. If genuinely not found after thorough search: say "Not found in the transcript"
+9. Never mix information from different sources unless comparing"""
 
     messages.append({"role": "user", "content": user_message})
 
@@ -38,7 +44,10 @@ Rules:
                 "model": OLLAMA_MODEL,
                 "messages": messages,
                 "stream": False,
-                "options": {"temperature": 0.1, "num_predict": 800}
+                "options": {
+                    "temperature": 0.05,
+                    "num_predict": 1000
+                }
             },
             timeout=120.0
         )

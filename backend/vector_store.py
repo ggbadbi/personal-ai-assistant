@@ -59,9 +59,7 @@ def add_chunks(chunks: List[Chunk]) -> int:
 
 
 def search(query: str, k: int = 6) -> List[dict]:
-    """Search for top-k relevant chunks for a query."""
     collection = _get_collection()
-
     if collection.count() == 0:
         return []
 
@@ -77,10 +75,13 @@ def search(query: str, k: int = 6) -> List[dict]:
 
     chunks = []
     for i in range(len(results["documents"][0])):
+        meta = results["metadatas"][0][i]
         chunks.append({
             "text": results["documents"][0][i],
-            "metadata": results["metadatas"][0][i],
-            "score": round(1 - results["distances"][0][i], 4)
+            "metadata": meta,
+            "score": round(1 - results["distances"][0][i], 4),
+            "timestamp": meta.get("timestamp", None),
+            "timestamp_url": meta.get("timestamp_url", None)
         })
 
     return chunks

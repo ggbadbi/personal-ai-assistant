@@ -1,6 +1,7 @@
 import os
 import sys
 import uuid
+import time
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
@@ -13,6 +14,8 @@ from backend.vector_store import add_chunks, get_all_sources, delete_source, tot
 from backend.llm import is_ollama_running, summarize_document
 from ingestion.file_loader import load_file
 from ingestion.web_scraper import ingest_url
+from backend.analytics import log_query, log_ingestion, get_stats
+from ingestion.youtube_loader import ingest_youtube
 
 load_dotenv()
 
@@ -44,7 +47,19 @@ def health():
 def chat_endpoint(request: ChatRequest):
     if not is_ollama_running():
         raise HTTPException(status_code=503, detail="Ollama is not running")
+
+    start = time.time()
     result = chat(request.message, request.session_id)
+    elapsed_ms = int((time.time() - start) * 1000)
+
+    log_query(
+        query=request.message,
+        answer=result.get("answer", ""),
+        sources_count=result.get("chunks_used", 0),
+        session_id=request.session_id,
+        response_time_ms=elapsed_ms
+    )
+
     return result
 
 
@@ -70,7 +85,10 @@ async def ingest_file(file: UploadFile = File(...)):
         added = add_chunks(chunks)
         print(f"Added to DB: {added}")
 
-        # Read raw text for summary (bypasses dedup)
+        # Log ingestion to analytics
+        log_ingestion(file.filename, ext.strip('.'), added, "file")
+
+        # Summary — read raw text directly (bypasses dedup)
         try:
             with open(save_path, 'r', encoding='utf-8', errors='ignore') as rf:
                 raw_text = rf.read()
@@ -101,12 +119,97 @@ def ingest_url_endpoint(payload: dict):
         raise HTTPException(status_code=400, detail="URL required")
     chunks, title = ingest_url(url)
     added = add_chunks(chunks)
+    log_ingestion(title, "url", added, "webpage")
     return {
         "status": "success",
         "url": url,
         "title": title,
         "chunks_added": added
     }
+
+
+@app.post("/ingest/youtube")
+def ingest_youtube_endpoint(payload: dict):
+    url = payload.get("url")
+    if not url:
+        raise HTTPException(status_code=400, detail="URL required")
+
+    print(f"YouTube ingest: {url}")
+    chunks, title = ingest_youtube(url)
+
+    added = add_chunks(chunks)
+    print(f"Added to DB: {added}")
+
+    # Summary from first 5 chunks of transcript
+    if chunks:
+        transcript_sample = " ".join([c.text for c in chunks[:5]])
+        summary = summarize_document(transcript_sample, title)
+    else:
+        summary = "• No transcript available for this video."
+
+    log_ingestion(title, "youtube", added, "youtube")
+
+    return {
+        "status": "success" if added > 0 else "no_transcript",
+        "url": url,
+        "title": title,
+        "chunks_added": added,
+        "summary": summary
+    }
+
+
+@app.post("/ingest/reupload")
+async def reupload_source(source_name: str, file: UploadFile = File(...)):
+    """Delete old source and re-ingest with new file."""
+    try:
+        # Delete old chunks
+        deleted = delete_source(source_name)
+        print(f"Deleted {deleted} old chunks for: {source_name}")
+
+        # Save new file
+        ext = os.path.splitext(file.filename)[1].lower()
+        save_path = os.path.join(UPLOAD_DIR, file.filename)
+        contents = await file.read()
+        with open(save_path, "wb") as f:
+            f.write(contents)
+
+        # Clear dedup hash for this file so it re-ingests
+        import json
+        hash_file = "./data/processed/seen_hashes.json"
+        if os.path.exists(hash_file):
+            with open(hash_file, 'r') as hf:
+                hashes = set(json.load(hf))
+            # We can't easily remove specific hashes so just clear all
+            os.remove(hash_file)
+
+        chunks = load_file(save_path)
+        added = add_chunks(chunks)
+        log_ingestion(file.filename, ext.strip('.'), added, "file")
+
+        try:
+            with open(save_path, 'r', encoding='utf-8', errors='ignore') as rf:
+                raw_text = rf.read()
+            summary = summarize_document(raw_text, file.filename)
+        except:
+            summary = "• Summary unavailable."
+
+        return {
+            "status": "success",
+            "old_source": source_name,
+            "filename": file.filename,
+            "old_chunks_deleted": deleted,
+            "new_chunks_added": added,
+            "summary": summary
+        }
+    except Exception as e:
+        import traceback
+        print(f"REUPLOAD ERROR:\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/analytics")
+def analytics():
+    return get_stats()
 
 
 @app.get("/sources")

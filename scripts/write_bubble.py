@@ -1,4 +1,4 @@
-import ReactMarkdown from 'react-markdown'
+content = r"""import ReactMarkdown from 'react-markdown'
 import { useState } from 'react'
 
 export default function MessageBubble({ message, onEdit }) {
@@ -67,3 +67,8 @@ export default function MessageBubble({ message, onEdit }) {
     </div>
   )
 }
+"""
+
+with open("frontend/src/components/MessageBubble.jsx", "w", encoding="utf-8") as f:
+    f.write(content)
+print("Done!")
