@@ -1,4 +1,3 @@
-# backend/llm.py
 import httpx
 import os
 from dotenv import load_dotenv
@@ -11,15 +10,11 @@ EMBED_MODEL = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
 
 
 def ask(prompt: str, context: str, history: list = []) -> str:
-    """Send a prompt + retrieved context to Ollama and get a response."""
-
     messages = []
 
-    # Add history BEFORE the current message (but not the context injection)
     for turn in history[:-2] if len(history) > 2 else []:
         messages.append({"role": turn["role"], "content": turn["content"]})
 
-    # Current message with context injected
     user_message = f"""Here is relevant content from my personal documents:
 
 ---DOCUMENTS---
@@ -43,10 +38,7 @@ Rules:
                 "model": OLLAMA_MODEL,
                 "messages": messages,
                 "stream": False,
-                "options": {
-                    "temperature": 0.1,
-                    "num_predict": 800
-                }
+                "options": {"temperature": 0.1, "num_predict": 800}
             },
             timeout=120.0
         )
@@ -55,15 +47,12 @@ Rules:
     except Exception as e:
         return f"LLM Error: {str(e)}"
 
+
 def get_embedding(text: str) -> list:
-    """Convert text to a vector embedding using nomic-embed-text."""
     try:
         response = httpx.post(
             f"{OLLAMA_URL}/api/embeddings",
-            json={
-                "model": EMBED_MODEL,
-                "prompt": text
-            },
+            json={"model": EMBED_MODEL, "prompt": text},
             timeout=30.0
         )
         return response.json()["embedding"]
@@ -73,9 +62,34 @@ def get_embedding(text: str) -> list:
 
 
 def is_ollama_running() -> bool:
-    """Check if Ollama server is up."""
     try:
         httpx.get(f"{OLLAMA_URL}/api/tags", timeout=3.0)
         return True
     except:
         return False
+
+
+def summarize_document(text: str, filename: str) -> str:
+    truncated = text[:4000].strip()
+    prompt = f"""Read this document and write exactly 3 bullet points summarizing the key information.
+
+Document: {filename}
+Content: {truncated}
+
+Write exactly 3 bullet points starting with •
+Do not write anything else before or after the bullet points."""
+
+    try:
+        response = httpx.post(
+            f"{OLLAMA_URL}/api/generate",
+            json={
+                "model": OLLAMA_MODEL,
+                "prompt": prompt,
+                "stream": False,
+                "options": {"temperature": 0.1, "num_predict": 300}
+            },
+            timeout=60.0
+        )
+        return response.json()["response"]
+    except Exception as e:
+        return f"• Summary unavailable: {e}"

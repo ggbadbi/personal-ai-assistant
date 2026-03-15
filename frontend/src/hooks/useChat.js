@@ -1,7 +1,5 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { sendMessage } from '../api/client'
-
-const SESSION_ID = 'session_' + Math.random().toString(36).slice(2, 9)
 
 export function useChat() {
   const [messages, setMessages] = useState([
@@ -12,29 +10,29 @@ export function useChat() {
     }
   ])
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
+  const sessionId = useRef('session_' + Math.random().toString(36).slice(2, 9))
 
   const send = useCallback(async (text) => {
-    if (!text.trim() || loading) return
+    if (!text || !text.trim() || loading) return
 
-    setMessages(prev => [...prev, { role: 'user', content: text, sources: [] }])
+    const userMsg = { role: 'user', content: text, sources: [] }
+    setMessages(prev => [...prev, userMsg])
     setLoading(true)
-    setError(null)
 
     try {
-      const res = await sendMessage(text, SESSION_ID)
+      const res = await sendMessage(text, sessionId.current)
       const data = res.data
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: data.answer,
+        content: data.answer || 'No response',
         sources: data.sources || [],
         chunks_used: data.chunks_used
       }])
     } catch (e) {
-      setError('Failed to get response.')
+      console.error('Chat error:', e)
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: '❌ Error connecting to backend. Make sure uvicorn is running on port 8000.',
+        content: '❌ Error: ' + (e.response?.data?.detail || e.message),
         sources: []
       }])
     } finally {
@@ -42,5 +40,5 @@ export function useChat() {
     }
   }, [loading])
 
-  return { messages, loading, error, send }
+  return { messages, loading, send }
 }

@@ -1,7 +1,6 @@
 import os
 import sys
 import uuid
-import shutil
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
@@ -11,7 +10,7 @@ from dotenv import load_dotenv
 from backend.models import ChatRequest, ChatResponse, HealthResponse
 from backend.chat import chat
 from backend.vector_store import add_chunks, get_all_sources, delete_source, total_count
-from backend.llm import is_ollama_running
+from backend.llm import is_ollama_running, summarize_document
 from ingestion.file_loader import load_file
 from ingestion.web_scraper import ingest_url
 
@@ -29,6 +28,7 @@ app.add_middleware(
 
 UPLOAD_DIR = os.getenv("DATA_RAW_PATH", "./data/raw")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
 
 @app.get("/health", response_model=HealthResponse)
 def health():
@@ -57,39 +57,50 @@ async def ingest_file(file: UploadFile = File(...)):
 
         os.makedirs(UPLOAD_DIR, exist_ok=True)
         save_path = os.path.join(UPLOAD_DIR, file.filename)
-        
+
         contents = await file.read()
         with open(save_path, "wb") as f:
             f.write(contents)
 
-        print(f"Saved file to: {save_path}")
+        print(f"Saved: {save_path}")
 
         chunks = load_file(save_path)
         print(f"Chunks created: {len(chunks)}")
-        
+
         added = add_chunks(chunks)
-        print(f"Chunks added to DB: {added}")
+        print(f"Added to DB: {added}")
+
+        # Read raw text for summary (bypasses dedup)
+        try:
+            with open(save_path, 'r', encoding='utf-8', errors='ignore') as rf:
+                raw_text = rf.read()
+            print(f"Summarizing {len(raw_text)} chars...")
+            summary = summarize_document(raw_text, file.filename)
+            print(f"Summary done: {summary[:60]}")
+        except Exception as sum_err:
+            print(f"Summary error: {sum_err}")
+            summary = "• Summary unavailable."
 
         return {
             "status": "success",
             "filename": file.filename,
             "chunks_added": added,
+            "summary": summary,
             "doc_id": str(uuid.uuid4())
         }
     except Exception as e:
         import traceback
-        print(f"INGEST ERROR: {traceback.format_exc()}")
+        print(f"INGEST ERROR:\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/ingest/url")
 def ingest_url_endpoint(payload: dict):
     url = payload.get("url")
     if not url:
         raise HTTPException(status_code=400, detail="URL required")
-
     chunks, title = ingest_url(url)
     added = add_chunks(chunks)
-
     return {
         "status": "success",
         "url": url,

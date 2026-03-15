@@ -79,11 +79,11 @@ export default function Sidebar() {
 
       <div style={{ flex: 1, overflowY: 'auto' }}>
         {tab === 'upload' && (
-          <FileUpload onIngested={() => {
-            setRefreshKB(r => r + 1)
-            setTab('sources')
-          }} />
-        )}
+  <FileUpload onIngested={() => {
+    setRefreshKB(r => r + 1)
+    // removed setTab('sources') — stay on upload tab to show summary
+  }} />
+)}
         {tab === 'sources' && <KnowledgeBase refresh={refreshKB} />}
       </div>
     </div>
