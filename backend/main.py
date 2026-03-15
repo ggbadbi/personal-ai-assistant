@@ -4,6 +4,7 @@ import uuid
 import time
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -16,6 +17,9 @@ from ingestion.file_loader import load_file
 from ingestion.web_scraper import ingest_url
 from backend.analytics import log_query, log_ingestion, get_stats
 from ingestion.youtube_loader import ingest_youtube
+from ingestion.gmail_connector import ingest_gmail
+from backend.digest import generate_digest
+from backend.study import generate_flashcards, generate_quiz, generate_summary_notes
 
 load_dotenv()
 
@@ -157,6 +161,42 @@ def ingest_youtube_endpoint(payload: dict):
         "summary": summary
     }
 
+@app.post("/ingest/gmail")
+def ingest_gmail_endpoint(payload: dict = {}):
+    """Ingest emails from Gmail."""
+    max_emails = payload.get("max_emails", 100)
+    days_back = payload.get("days_back", 30)
+
+    try:
+        chunks, email_count = ingest_gmail(
+            max_emails=max_emails,
+            days_back=days_back
+        )
+        added = add_chunks(chunks)
+        log_ingestion("Gmail", "email", added, "email")
+
+        return {
+            "status": "success",
+            "emails_fetched": email_count,
+            "chunks_added": added
+        }
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        import traceback
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/ingest/gmail/status")
+def gmail_status():
+    """Check if Gmail is connected."""
+    import os
+    return {
+        "credentials_found": os.path.exists("credentials.json"),
+        "token_found": os.path.exists("token.json"),
+        "connected": os.path.exists("token.json")
+    }
 
 @app.post("/ingest/reupload")
 async def reupload_source(source_name: str, file: UploadFile = File(...)):
@@ -226,3 +266,37 @@ def remove_source(source_name: str):
 @app.get("/")
 def root():
     return {"message": "Personal AI Assistant API is running"}
+
+@app.get("/digest")
+def daily_digest():
+    """Generate today's knowledge digest."""
+    result = generate_digest()
+    if "error" in result:
+        raise HTTPException(status_code=503, detail=result["error"])
+    return result
+
+@app.post("/study/flashcards")
+def flashcards_endpoint(payload: dict = {}):
+    topic = payload.get("topic", None)
+    count = payload.get("count", 5)
+    cards = generate_flashcards(topic=topic, count=count)
+    if not cards:
+        raise HTTPException(status_code=404, detail="Could not generate flashcards. Make sure you have documents ingested.")
+    return {"cards": cards, "count": len(cards), "topic": topic}
+
+
+@app.post("/study/quiz")
+def quiz_endpoint(payload: dict = {}):
+    topic = payload.get("topic", None)
+    count = payload.get("count", 5)
+    questions = generate_quiz(topic=topic, count=count)
+    if not questions:
+        raise HTTPException(status_code=404, detail="Could not generate quiz questions.")
+    return {"questions": questions, "count": len(questions), "topic": topic}
+
+
+@app.post("/study/notes")
+def notes_endpoint(payload: dict = {}):
+    source = payload.get("source", None)
+    notes = generate_summary_notes(source_name=source)
+    return {"notes": notes, "source": source}

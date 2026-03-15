@@ -46,10 +46,7 @@ STRICT RULES:
                 "model": OLLAMA_MODEL,
                 "messages": messages,
                 "stream": False,
-                "options": {
-                    "temperature": 0.05,
-                    "num_predict": 1000
-                }
+                "options": {"temperature": 0.05, "num_predict": 1000}
             },
             timeout=120.0
         )
@@ -66,7 +63,14 @@ def get_embedding(text: str) -> list:
             json={"model": EMBED_MODEL, "prompt": text},
             timeout=30.0
         )
-        return response.json()["embedding"]
+        data = response.json()
+        if "embedding" in data:
+            return data["embedding"]
+        elif "embeddings" in data:
+            return data["embeddings"][0]
+        else:
+            print(f"Embedding error: unexpected keys: {list(data.keys())}")
+            return []
     except Exception as e:
         print(f"Embedding error: {e}")
         return []

@@ -1,62 +1,106 @@
 content = r"""import ReactMarkdown from 'react-markdown'
 import { useState } from 'react'
 
-export default function MessageBubble({ message, onEdit }) {
+export default function MessageBubble({ message, onEdit, onPin, highlight }) {
   const [showSources, setShowSources] = useState(false)
   const [hovered, setHovered] = useState(false)
   const isUser = message.role === 'user'
 
+  const highlightText = (text) => {
+    if (!highlight || !text) return text
+    const idx = text.toLowerCase().indexOf(highlight.toLowerCase())
+    if (idx === -1) return text
+    return text.slice(0, idx) + '**' + text.slice(idx, idx + highlight.length) + '**' + text.slice(idx + highlight.length)
+  }
+
   return (
     <div
-      style={{ display: 'flex', flexDirection: 'column', alignItems: isUser ? 'flex-end' : 'flex-start', marginBottom: '16px' }}
+      style={{ display: 'flex', flexDirection: 'column', alignItems: isUser ? 'flex-end' : 'flex-start', marginBottom: '20px', animation: 'fadeIn 0.3s ease' }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <div style={{ fontSize: '10px', color: '#555', marginBottom: '4px', fontFamily: 'monospace', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-        {isUser ? 'YOU' : 'AI ASSISTANT'}
-        {isUser && onEdit && hovered && (
-          <button
-            onClick={onEdit}
-            style={{ background: 'none', border: '1px solid #2a2a1a', borderRadius: '4px', padding: '1px 7px', color: '#fbbf24', fontSize: '10px', cursor: 'pointer', fontFamily: 'monospace' }}
-          >
+      {/* Role + actions */}
+      <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '5px', fontFamily: 'JetBrains Mono', letterSpacing: '2px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+        {isUser ? 'YOU' : '🌊 NEURAL BASE'}
+        {hovered && isUser && onEdit && (
+          <button onClick={onEdit} style={{ background: 'rgba(255,215,0,0.1)', border: '1px solid rgba(255,215,0,0.3)', borderRadius: '4px', padding: '1px 8px', color: 'var(--gold)', fontSize: '10px', cursor: 'pointer' }}>
             edit
+          </button>
+        )}
+        {hovered && !isUser && onPin && (
+          <button onClick={onPin} style={{ background: 'rgba(0,212,224,0.1)', border: '1px solid var(--border)', borderRadius: '4px', padding: '1px 8px', color: 'var(--teal-bright)', fontSize: '10px', cursor: 'pointer' }}>
+            📌 pin
           </button>
         )}
       </div>
 
-      <div style={{ maxWidth: '75%', padding: '12px 16px', borderRadius: isUser ? '18px 18px 4px 18px' : '18px 18px 18px 4px', background: isUser ? '#1a3a5c' : '#12121e', border: isUser ? '1px solid #2a5a8c' : '1px solid #1e1e2e', color: '#e0e0f0', fontSize: '14px', lineHeight: '1.6' }}>
-        <ReactMarkdown>{message.content}</ReactMarkdown>
+      {/* Bubble */}
+      <div style={{
+        maxWidth: '78%', padding: '13px 17px',
+        borderRadius: isUser ? '18px 18px 4px 18px' : '4px 18px 18px 18px',
+        background: isUser
+          ? 'linear-gradient(135deg, rgba(13,115,119,0.4), rgba(0,212,224,0.15))'
+          : 'rgba(7,30,51,0.8)',
+        border: isUser
+          ? '1px solid rgba(0,212,224,0.3)'
+          : '1px solid var(--border)',
+        color: 'var(--text-primary)',
+        fontSize: '14px', lineHeight: '1.7',
+        boxShadow: isUser ? '0 4px 20px rgba(0,212,224,0.1)' : '0 4px 20px rgba(0,0,0,0.3)',
+        backdropFilter: 'blur(10px)'
+      }}>
+        <ReactMarkdown>{highlightText(message.content)}</ReactMarkdown>
       </div>
 
+      {/* Sources */}
       {message.sources && message.sources.length > 0 && (
-        <div style={{ maxWidth: '80%', marginTop: '6px' }}>
-          <button onClick={() => setShowSources(!showSources)} style={{ background: 'none', border: '1px solid #252535', borderRadius: '6px', padding: '3px 10px', color: '#60a5fa', fontSize: '11px', cursor: 'pointer', fontFamily: 'monospace' }}>
-            {showSources ? '\u25B2' : '\u25BC'} {message.sources.length} source{message.sources.length > 1 ? 's' : ''} used
+        <div style={{ maxWidth: '78%', marginTop: '8px' }}>
+          <button onClick={() => setShowSources(!showSources)} style={{
+            background: 'rgba(0,212,224,0.05)', border: '1px solid var(--border)',
+            borderRadius: '20px', padding: '4px 12px',
+            color: 'var(--teal)', fontSize: '11px', cursor: 'pointer',
+            fontFamily: 'JetBrains Mono', transition: 'all 0.2s',
+            display: 'flex', alignItems: 'center', gap: '6px'
+          }}>
+            <span style={{ fontSize: '8px' }}>{showSources ? '\u25BC' : '\u25B6'}</span>
+            {message.sources.length} source{message.sources.length > 1 ? 's' : ''} · {message.chunks_used || message.sources.length} chunks
           </button>
 
           {showSources && (
-            <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {message.sources.map((src, i) => {
                 const isYT = src.type === 'youtube'
                 const isWeb = src.type === 'webpage'
                 const icon = isYT ? '\uD83D\uDCFA' : isWeb ? '\uD83C\uDF10' : '\uD83D\uDCC4'
-                const borderColor = isYT ? '#f87171' : isWeb ? '#4ade80' : '#60a5fa'
+                const glowColor = isYT ? 'rgba(255,107,107,0.2)' : isWeb ? 'rgba(127,255,212,0.2)' : 'rgba(0,212,224,0.2)'
+                const borderColor = isYT ? '#f87171' : isWeb ? 'var(--seafoam)' : 'var(--teal-bright)'
                 return (
-                  <div key={i} style={{ background: '#0a0a14', border: '1px solid #1a1a2e', borderLeft: '3px solid ' + borderColor, borderRadius: '6px', padding: '8px 10px', fontSize: '11px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: '5px' }}>
-                      <span style={{ fontSize: '13px' }}>{icon}</span>
-                      <span style={{ color: borderColor, fontFamily: 'monospace', fontWeight: 600 }}>{src.source}</span>
-                      <span style={{ color: '#444', fontSize: '10px' }}>{src.type} \u00B7 score: {src.score}</span>
+                  <div key={i} style={{
+                    background: 'rgba(7,30,51,0.9)', backdropFilter: 'blur(10px)',
+                    border: '1px solid var(--border)', borderLeft: '3px solid ' + borderColor,
+                    borderRadius: '8px', padding: '10px 12px', fontSize: '11px',
+                    boxShadow: '0 2px 10px ' + glowColor
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: '6px' }}>
+                      <span style={{ fontSize: '14px' }}>{icon}</span>
+                      <span style={{ color: borderColor, fontFamily: 'JetBrains Mono', fontWeight: 600, fontSize: '11px' }}>{src.source.slice(0, 40)}{src.source.length > 40 ? '...' : ''}</span>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>{src.type} \u00B7 {src.score}</span>
                       {isYT && src.timestamp && src.timestamp_url && (
-                        <a href={src.timestamp_url} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', color: '#fbbf24', textDecoration: 'none', background: '#1a1200', border: '1px solid #3a2800', borderRadius: '4px', padding: '2px 7px', fontSize: '10px', fontFamily: 'monospace', cursor: 'pointer' }}>
+                        <a href={src.timestamp_url} target="_blank" rel="noopener noreferrer" style={{
+                          display: 'inline-flex', alignItems: 'center', gap: '4px',
+                          color: 'var(--gold)', textDecoration: 'none',
+                          background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.25)',
+                          borderRadius: '6px', padding: '2px 8px',
+                          fontSize: '10px', fontFamily: 'JetBrains Mono'
+                        }}>
                           {'\u25B6'} {src.timestamp}
                         </a>
                       )}
-                      {isYT && src.channel && (
-                        <span style={{ color: '#555', fontSize: '10px', fontStyle: 'italic' }}>{src.channel}</span>
-                      )}
+                      {isYT && src.channel && <span style={{ color: 'var(--text-muted)', fontSize: '10px', fontStyle: 'italic' }}>{src.channel}</span>}
                     </div>
-                    <div style={{ color: '#666', lineHeight: '1.5', borderTop: '1px solid #13131f', paddingTop: '5px' }}>{src.snippet}</div>
+                    <div style={{ color: 'var(--text-muted)', lineHeight: '1.5', borderTop: '1px solid var(--border)', paddingTop: '6px', fontSize: '11px' }}>
+                      {src.snippet}
+                    </div>
                   </div>
                 )
               })}
@@ -71,4 +115,4 @@ export default function MessageBubble({ message, onEdit }) {
 
 with open("frontend/src/components/MessageBubble.jsx", "w", encoding="utf-8") as f:
     f.write(content)
-print("Done!")
+print("MessageBubble.jsx written!")

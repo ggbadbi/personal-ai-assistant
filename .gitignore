@@ -13,3 +13,5 @@ frontend/dist/
 credentials.json
 token.json
 models/
+credentials.json
+token.json

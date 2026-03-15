@@ -3,6 +3,7 @@ import { getHealth } from '../api/client'
 import FileUpload from './FileUpload'
 import KnowledgeBase from './KnowledgeBase'
 import Analytics from './Analytics'
+import StudyMode from './StudyMode'
 
 export default function Sidebar({ onClose }) {
   const [health, setHealth] = useState(null)
@@ -26,7 +27,8 @@ export default function Sidebar({ onClose }) {
   const tabs = [
     { key: 'upload', label: '⬆', title: 'Upload' },
     { key: 'sources', label: '📚', title: 'Sources' },
-    { key: 'analytics', label: '📊', title: 'Analytics' },
+    { key: 'analytics', label: '📊', title: 'Stats' },
+    { key: 'study', label: '🎓', title: 'Study' },
   ]
 
   return (
@@ -42,7 +44,8 @@ export default function Sidebar({ onClose }) {
       <div style={{
         padding: '16px',
         borderBottom: '1px solid var(--border)',
-        background: 'linear-gradient(180deg, rgba(13,115,119,0.15) 0%, transparent 100%)'
+        background: 'linear-gradient(180deg, rgba(13,115,119,0.15) 0%, transparent 100%)',
+        flexShrink: 0
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
           <div>
@@ -62,7 +65,6 @@ export default function Sidebar({ onClose }) {
           </button>
         </div>
 
-        {/* Status pills */}
         {health && (
           <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
             {[
@@ -102,15 +104,14 @@ export default function Sidebar({ onClose }) {
       <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
         {tabs.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} title={t.title} style={{
-            flex: 1, padding: '11px 4px',
+            flex: 1, padding: '9px 2px',
             background: 'none', border: 'none',
             borderBottom: `2px solid ${tab === t.key ? 'var(--teal-bright)' : 'transparent'}`,
             color: tab === t.key ? 'var(--teal-bright)' : 'var(--text-muted)',
-            fontSize: tab === t.key ? '16px' : '15px',
-            cursor: 'pointer', transition: 'all 0.2s'
+            fontSize: '14px', cursor: 'pointer', transition: 'all 0.2s'
           }}>
             {t.label}
-            <div style={{ fontSize: '9px', fontFamily: 'JetBrains Mono', marginTop: '2px', opacity: 0.7 }}>
+            <div style={{ fontSize: '8px', fontFamily: 'JetBrains Mono', marginTop: '2px', opacity: 0.7 }}>
               {t.title}
             </div>
           </button>
@@ -122,6 +123,7 @@ export default function Sidebar({ onClose }) {
         {tab === 'upload' && <FileUpload onIngested={() => setRefreshKB(r => r + 1)} />}
         {tab === 'sources' && <KnowledgeBase refresh={refreshKB} />}
         {tab === 'analytics' && <Analytics />}
+        {tab === 'study' && <StudyMode />}
       </div>
     </div>
   )
