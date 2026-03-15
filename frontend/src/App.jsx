@@ -9,17 +9,25 @@ export default function App() {
       background: '#07070f',
       color: '#e0e0f0',
       fontFamily: "'Segoe UI', system-ui, sans-serif",
-      overflow: 'hidden'
+      overflow: 'hidden',
+      minHeight: 0
     }}>
       <Sidebar />
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        minHeight: 0
+      }}>
         <div style={{
           padding: '14px 20px',
           borderBottom: '1px solid #1a1a2e',
           display: 'flex',
           alignItems: 'center',
           gap: '12px',
-          background: '#080810'
+          background: '#080810',
+          flexShrink: 0
         }}>
           <div style={{ fontSize: '20px' }}>🧠</div>
           <div>

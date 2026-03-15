@@ -15,7 +15,7 @@ def ask(prompt: str, context: str, history: list = []) -> str:
     for turn in history[:-2] if len(history) > 2 else []:
         messages.append({"role": turn["role"], "content": turn["content"]})
 
-    user_message = f"""You are analyzing the user's personal knowledge base which contains documents, notes, and video transcripts in multiple languages including English, Hindi, Sindhi, and Punjabi.
+    user_message = f"""You are analyzing the user's personal knowledge base which contains documents, notes, and video transcripts in multiple languages including English, Hindi, Sindhi (Devanagari), and Punjabi (Gurmukhi script).
 
 KNOWLEDGE BASE CONTENT:
 ===
@@ -26,14 +26,16 @@ CONVERSATION TASK: {prompt}
 
 STRICT RULES:
 1. Answer ONLY from the content above — never from general knowledge
-2. For songs/lyrics: identify the EXACT words, names, and references present in the transcript
-3. For Sufi/devotional songs: look for saint names (Jhulelal, Lal Shahbaz, etc), religious terms, and community references
-4. If a word appears in Devanagari/Hindi script but refers to Sindhi culture — say so explicitly
-5. Count exact occurrences when asked "how many times"
-6. For follow-up questions like "in the whole song" — search ALL sources not just one
-7. Quote the EXACT text from the transcript as evidence
-8. If genuinely not found after thorough search: say "Not found in the transcript"
-9. Never mix information from different sources unless comparing"""
+2. Recognize text in ALL scripts: Latin (English), Devanagari (Hindi/Sindhi), Gurmukhi (Punjabi)
+3. For songs/lyrics: identify saint names (Jhulelal, Lal Shahbaz, Guru Nanak, etc), religious terms, and community references
+4. Sindhi cultural markers: Jhulelal, Sindhu river, Cheti Chand, Sufi terms in Devanagari
+5. Punjabi cultural markers: Waheguru, Gurbani terms, Gurmukhi script references
+6. Count exact occurrences when asked "how many times" — scan ALL provided chunks carefully
+7. Quote EXACT text from the transcript as evidence with timestamp if available
+8. If the question mentions a specific song or video by name — answer EXCLUSIVELY from that source only
+9. Do NOT mix information from different sources unless explicitly asked to compare
+10. If genuinely not found after thorough search: say "Not found in the transcript"
+11. For follow-up questions like "in the whole song" or "how many times" — re-scan every chunk provided"""
 
     messages.append({"role": "user", "content": user_message})
 

@@ -45,50 +45,70 @@ def get_video_info(video_id: str) -> dict:
 
 
 def get_transcript_with_timestamps(video_id: str) -> list:
-    # Try caption API first — try ALL available languages
+    """Try captions in all supported languages, fall back to Whisper."""
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
         api = YouTubeTranscriptApi()
-        
-        # First try to list what's available
+
+        # Priority language order: English, Hindi, Sindhi, Punjabi, then anything
+        PRIORITY_LANGS = ['en', 'en-US', 'en-GB', 'hi', 'sd', 'pa', 'pa-IN', 'gu', 'ur']
+
         try:
             transcript_list = api.list(video_id)
-            # Get first available transcript (any language)
-            for t in transcript_list:
+            available = list(transcript_list)
+
+            print(f"   🌐 Available transcripts:")
+            for t in available:
+                print(f"      - {t.language_code}: {t.language} ({'auto' if t.is_generated else 'manual'})")
+
+            # Try priority languages first
+            for lang in PRIORITY_LANGS:
+                for t in available:
+                    if t.language_code.startswith(lang):
+                        try:
+                            fetched = t.fetch()
+                            segments = [{'text': s.text, 'start': s.start, 'duration': getattr(s, 'duration', 3.0)} for s in fetched]
+                            print(f"   ✅ Using transcript: {t.language} ({t.language_code})")
+                            return segments
+                        except Exception as e:
+                            print(f"   ⚠ Failed {t.language_code}: {e}")
+                            continue
+
+            # If no priority match — use first available
+            for t in available:
                 try:
                     fetched = t.fetch()
                     segments = [{'text': s.text, 'start': s.start, 'duration': getattr(s, 'duration', 3.0)} for s in fetched]
-                    print(f"   ✅ Got {len(segments)} segments in language: {t.language_code}")
+                    print(f"   ✅ Using first available: {t.language} ({t.language_code})")
                     return segments
                 except:
                     continue
-        except Exception as e2:
-            print(f"   ⚠ list failed: {e2}")
-            
-        # Fallback — try fetching directly
-        fetched = api.fetch(video_id)
-        segments = [{'text': s.text, 'start': s.start, 'duration': getattr(s, 'duration', 3.0)} for s in fetched]
-        print(f"   ✅ Got {len(segments)} caption segments")
-        return segments
+
+        except Exception as e:
+            print(f"   ⚠ Transcript list failed: {e}")
+
+            # Direct fetch fallback
+            fetched = api.fetch(video_id)
+            segments = [{'text': s.text, 'start': s.start, 'duration': getattr(s, 'duration', 3.0)} for s in fetched]
+            print(f"   ✅ Direct fetch: {len(segments)} segments")
+            return segments
+
     except Exception as e:
         print(f"   ⚠ Caption API failed: {e}")
-        print(f"   🎙️ Falling back to Whisper transcription...")
+        print(f"   🎙️ Falling back to Whisper...")
 
     return transcribe_with_whisper(video_id)
 
-
 def transcribe_with_whisper(video_id: str) -> list:
-    """Download audio and transcribe using faster-whisper on RTX 4080."""
+    """Download audio and transcribe using faster-whisper."""
     import tempfile
 
-    audio_path = None
     try:
         import yt_dlp
         from faster_whisper import WhisperModel
 
-        # Download audio only
         with tempfile.TemporaryDirectory() as tmpdir:
-            audio_path = os.path.join(tmpdir, f"{video_id}.mp3")
+            audio_path = os.path.join(tmpdir, f"{video_id}")
 
             print(f"   📥 Downloading audio...")
             ydl_opts = {
@@ -106,49 +126,55 @@ def transcribe_with_whisper(video_id: str) -> list:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([f"https://www.youtube.com/watch?v={video_id}"])
 
-            # Find the actual downloaded file
-            mp3_path = audio_path
-            if not os.path.exists(mp3_path):
-                mp3_path = audio_path + ".mp3"
-            if not os.path.exists(mp3_path):
-                for f in os.listdir(tmpdir):
-                    if f.endswith('.mp3') or f.endswith('.m4a') or f.endswith('.webm'):
-                        mp3_path = os.path.join(tmpdir, f)
-                        break
+            # Find downloaded file
+            mp3_path = None
+            for fname in os.listdir(tmpdir):
+                if fname.endswith(('.mp3', '.m4a', '.webm', '.opus')):
+                    mp3_path = os.path.join(tmpdir, fname)
+                    break
 
-            if not os.path.exists(mp3_path):
-                print(f"   ❌ Audio file not found in {tmpdir}")
+            if not mp3_path or not os.path.exists(mp3_path):
+                print(f"   ❌ Audio file not found in {tmpdir}: {os.listdir(tmpdir)}")
                 return []
 
             print(f"   🤖 Transcribing with Whisper (CPU)...")
+            print(f"   ℹ️  This takes 1-3 minutes for a song. Please wait...")
 
-            # Use CPU — avoids CUDA library issues
             model = WhisperModel(
                 "base",
-                device="cpu",        # ← changed from cuda to cpu
-                compute_type="int8"  # ← int8 works on CPU
+                device="cpu",
+                compute_type="int8"
             )
 
-            segments, info = model.transcribe(
+            segments_gen, info = model.transcribe(
                 mp3_path,
-                language=None,    # auto-detect language
+                language=None,
                 beam_size=5,
-                word_timestamps=True
+                word_timestamps=False,
+                condition_on_previous_text=True,
+                initial_prompt="This audio may be in English, Hindi, Sindhi, or Punjabi Gurmukhi."
             )
 
             print(f"   🌐 Detected language: {info.language} (confidence: {info.language_probability:.2f})")
 
+            # Consume generator into list
             result = []
-            for seg in segments:
-                result.append({
-                    'text': seg.text.strip(),
-                    'start': seg.start,
-                    'duration': seg.end - seg.start
-                })
+            for seg in segments_gen:
+                if seg.text.strip():
+                    result.append({
+                        'text': seg.text.strip(),
+                        'start': seg.start,
+                        'duration': seg.end - seg.start
+                    })
 
             print(f"   ✅ Whisper transcribed {len(result)} segments")
             return result
 
+    except Exception as e:
+        print(f"   ❌ Whisper error: {e}")
+        import traceback
+        print(traceback.format_exc())
+        return []
     except Exception as e:
         print(f"   ❌ Whisper error: {e}")
         import traceback
