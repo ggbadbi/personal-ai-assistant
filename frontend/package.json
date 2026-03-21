@@ -12,6 +12,7 @@
   "dependencies": {
     "@fontsource/space-grotesk": "^5.2.10",
     "axios": "^1.13.6",
+    "d3": "^7.9.0",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.0",
     "lucide-react": "^0.577.0",

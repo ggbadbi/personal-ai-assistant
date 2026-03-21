@@ -4,11 +4,13 @@ import FileUpload from './FileUpload'
 import KnowledgeBase from './KnowledgeBase'
 import Analytics from './Analytics'
 import StudyMode from './StudyMode'
+import KnowledgeGraph from './KnowledgeGraph'
 
 export default function Sidebar({ onClose, isMobile = false }) {
   const [health, setHealth] = useState(null)
   const [tab, setTab] = useState('upload')
   const [refreshKB, setRefreshKB] = useState(0)
+  const [graphOpen, setGraphOpen] = useState(false)
 
   useEffect(() => {
     const check = async () => {
@@ -29,6 +31,7 @@ export default function Sidebar({ onClose, isMobile = false }) {
     { key: 'sources', label: '📚', title: 'Sources' },
     { key: 'analytics', label: '📊', title: 'Stats' },
     { key: 'study', label: '🎓', title: 'Study' },
+    { key: 'graph', label: '🕸', title: 'Graph' },
   ]
 
   return (
@@ -93,14 +96,14 @@ export default function Sidebar({ onClose, isMobile = false }) {
       <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
         {tabs.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} title={t.title} style={{
-            flex: 1, padding: '9px 2px',
+            flex: 1, padding: '8px 1px',
             background: 'none', border: 'none',
             borderBottom: `2px solid ${tab === t.key ? 'var(--teal-bright)' : 'transparent'}`,
             color: tab === t.key ? 'var(--teal-bright)' : 'var(--text-muted)',
-            fontSize: '14px', cursor: 'pointer', transition: 'all 0.2s'
+            fontSize: '13px', cursor: 'pointer', transition: 'all 0.2s'
           }}>
             {t.label}
-            <div style={{ fontSize: '8px', fontFamily: 'JetBrains Mono', marginTop: '2px', opacity: 0.7 }}>{t.title}</div>
+            <div style={{ fontSize: '7px', fontFamily: 'JetBrains Mono', marginTop: '2px', opacity: 0.7 }}>{t.title}</div>
           </button>
         ))}
       </div>
@@ -111,7 +114,75 @@ export default function Sidebar({ onClose, isMobile = false }) {
         {tab === 'sources' && <KnowledgeBase refresh={refreshKB} />}
         {tab === 'analytics' && <Analytics />}
         {tab === 'study' && <StudyMode />}
+        {tab === 'graph' && (
+          <div style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+            <div style={{ fontSize: '48px' }}>🕸</div>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', lineHeight: '1.6' }}>
+              Interactive visual map showing how your documents, emails, and videos connect through shared topics
+            </div>
+            <button
+              onClick={() => setGraphOpen(true)}
+              style={{
+                background: 'linear-gradient(135deg, rgba(0,212,224,0.2), rgba(0,212,224,0.1))',
+                border: '1px solid rgba(0,212,224,0.3)', borderRadius: '12px',
+                padding: '14px 24px', color: '#00d4e0', fontSize: '14px',
+                cursor: 'pointer', fontFamily: 'Outfit', fontWeight: 700,
+                width: '100%', letterSpacing: '0.5px'
+              }}
+            >
+              🕸 Open Knowledge Graph
+            </button>
+            <div style={{ fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono', textAlign: 'center', opacity: 0.6 }}>
+              Opens fullscreen · Drag nodes · Scroll to zoom
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Fullscreen graph overlay */}
+      {graphOpen && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 200,
+          background: 'rgba(2,13,26,0.98)',
+          display: 'flex', flexDirection: 'column'
+        }}>
+          {/* Graph header */}
+          <div style={{
+            padding: '12px 20px', borderBottom: '1px solid var(--border)',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            background: 'rgba(4,20,36,0.9)', backdropFilter: 'blur(20px)',
+            flexShrink: 0
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ fontSize: '20px' }}>🕸</span>
+              <div>
+                <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--teal-bright)' }}>
+                  Knowledge Graph
+                </div>
+                <div style={{ fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono' }}>
+                  Visual map of your knowledge connections
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => setGraphOpen(false)}
+              style={{
+                background: 'rgba(255,107,107,0.1)', border: '1px solid rgba(255,107,107,0.3)',
+                borderRadius: '8px', padding: '6px 14px',
+                color: '#ff6b6b', cursor: 'pointer', fontSize: '13px',
+                fontFamily: 'Outfit'
+              }}
+            >
+              ✕ Close
+            </button>
+          </div>
+
+          {/* Graph content */}
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <KnowledgeGraph />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

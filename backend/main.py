@@ -20,6 +20,8 @@ from ingestion.youtube_loader import ingest_youtube
 from ingestion.gmail_connector import ingest_gmail
 from backend.digest import generate_digest
 from backend.study import generate_flashcards, generate_quiz, generate_summary_notes
+from backend.knowledge_graph import build_graph_data
+
 from ingestion.notion_connector import ingest_notion
 load_dotenv()
 
@@ -283,6 +285,16 @@ async def reupload_source(source_name: str, file: UploadFile = File(...)):
 def analytics():
     return get_stats()
 
+@app.get("/knowledge-graph")
+def knowledge_graph():
+    """Build and return knowledge graph data."""
+    try:
+        data = build_graph_data()
+        return data
+    except Exception as e:
+        import traceback
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/sources")
 def list_sources():
