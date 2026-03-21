@@ -6,8 +6,9 @@ import Analytics from './Analytics'
 import StudyMode from './StudyMode'
 import KnowledgeGraph from './KnowledgeGraph'
 import SyncStatus from './SyncStatus'
+import AuditLog from './AuditLog'
 
-export default function Sidebar({ onClose, isMobile = false }) {
+export default function Sidebar({ onClose, isMobile = false, onLogout = null }) {
   const [health, setHealth] = useState(null)
   const [tab, setTab] = useState('upload')
   const [refreshKB, setRefreshKB] = useState(0)
@@ -34,6 +35,7 @@ export default function Sidebar({ onClose, isMobile = false }) {
     { key: 'study', label: '🎓', title: 'Study' },
     { key: 'sync', label: '🔄', title: 'Sync' },
     { key: 'graph', label: '🕸', title: 'Graph' },
+    { key: 'audit', label: '🔒', title: 'Audit' },
   ]
 
   return (
@@ -62,13 +64,26 @@ export default function Sidebar({ onClose, isMobile = false }) {
               Neural Base
             </div>
           </div>
-          <button onClick={onClose} style={{
-            background: 'none', border: '1px solid var(--border)',
-            borderRadius: '8px', padding: '5px 8px',
-            color: 'var(--text-muted)', cursor: 'pointer', fontSize: '12px'
-          }}>
-            ✕
-          </button>
+          <div style={{ display: 'flex', gap: '6px' }}>
+            {onLogout && (
+              <button onClick={onLogout} title="Logout" style={{
+                background: 'rgba(255,107,107,0.08)',
+                border: '1px solid rgba(255,107,107,0.2)',
+                borderRadius: '8px', padding: '5px 8px',
+                color: '#ff6b6b', cursor: 'pointer', fontSize: '11px',
+                fontFamily: 'JetBrains Mono'
+              }}>
+                🚪
+              </button>
+            )}
+            <button onClick={onClose} style={{
+              background: 'none', border: '1px solid var(--border)',
+              borderRadius: '8px', padding: '5px 8px',
+              color: 'var(--text-muted)', cursor: 'pointer', fontSize: '12px'
+            }}>
+              ✕
+            </button>
+          </div>
         </div>
 
         {health && (
@@ -94,18 +109,18 @@ export default function Sidebar({ onClose, isMobile = false }) {
         )}
       </div>
 
-      {/* Tabs — scrollable on mobile */}
+      {/* Tabs */}
       <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', flexShrink: 0, overflowX: 'auto' }}>
         {tabs.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} title={t.title} style={{
-            flex: '0 0 auto', minWidth: '44px', padding: '8px 6px',
+            flex: '0 0 auto', minWidth: '40px', padding: '8px 4px',
             background: 'none', border: 'none',
             borderBottom: `2px solid ${tab === t.key ? 'var(--teal-bright)' : 'transparent'}`,
             color: tab === t.key ? 'var(--teal-bright)' : 'var(--text-muted)',
-            fontSize: '13px', cursor: 'pointer', transition: 'all 0.2s'
+            fontSize: '12px', cursor: 'pointer', transition: 'all 0.2s'
           }}>
             {t.label}
-            <div style={{ fontSize: '7px', fontFamily: 'JetBrains Mono', marginTop: '2px', opacity: 0.7 }}>{t.title}</div>
+            <div style={{ fontSize: '6px', fontFamily: 'JetBrains Mono', marginTop: '2px', opacity: 0.7 }}>{t.title}</div>
           </button>
         ))}
       </div>
@@ -117,6 +132,7 @@ export default function Sidebar({ onClose, isMobile = false }) {
         {tab === 'analytics' && <Analytics />}
         {tab === 'study' && <StudyMode />}
         {tab === 'sync' && <SyncStatus />}
+        {tab === 'audit' && <AuditLog />}
         {tab === 'graph' && (
           <div style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
             <div style={{ fontSize: '48px' }}>🕸</div>

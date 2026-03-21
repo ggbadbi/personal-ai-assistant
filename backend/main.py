@@ -3,6 +3,12 @@ import sys
 import uuid
 import time
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from backend.security import (
+    verify_password, create_session, verify_session,
+    revoke_session, log_event, get_audit_log,
+    UI_PASSWORD_ENABLED, detect_pii
+)
+from fastapi import Request
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -48,7 +54,8 @@ async def startup_event():
     interval = int(os.getenv("AUTO_SYNC_INTERVAL_HOURS", "6"))
     if auto_sync:
         start_scheduler(interval_hours=interval)
-        print(f"Auto-sync enabled every {interval} hours")
+    log_event("SERVER_START", f"Server started. Auto-sync: {auto_sync}")
+    print(f"Server started. Auto-sync: {auto_sync}, every {interval}h")
 
 
 @app.on_event("shutdown")
@@ -70,6 +77,42 @@ def health():
 @app.get("/")
 def root():
     return {"message": "Personal AI Assistant API is running"}
+
+# ── Security / Auth ──────────────────────────────────────────────────────────
+
+@app.post("/auth/login")
+def login(payload: dict, request: Request):
+    password = payload.get("password", "")
+    if verify_password(password):
+        token = create_session()
+        log_event("LOGIN_SUCCESS", "User logged in",
+                  ip_address=request.client.host, session_token=token)
+        return {"success": True, "token": token}
+    else:
+        log_event("LOGIN_FAILED", "Wrong password attempt",
+                  ip_address=request.client.host)
+        raise HTTPException(status_code=401, detail="Wrong password")
+
+
+@app.post("/auth/logout")
+def logout(payload: dict):
+    token = payload.get("token", "")
+    revoke_session(token)
+    log_event("LOGOUT", "User logged out", session_token=token)
+    return {"success": True}
+
+
+@app.get("/auth/status")
+def auth_status():
+    return {
+        "password_enabled": UI_PASSWORD_ENABLED,
+        "requires_login": UI_PASSWORD_ENABLED
+    }
+
+
+@app.get("/audit/log")
+def audit_log():
+    return {"events": get_audit_log(limit=100)}
 
 
 # ── Chat ─────────────────────────────────────────────────────────────────────
