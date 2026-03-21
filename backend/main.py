@@ -4,7 +4,6 @@ import uuid
 import time
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -18,11 +17,15 @@ from ingestion.web_scraper import ingest_url
 from backend.analytics import log_query, log_ingestion, get_stats
 from ingestion.youtube_loader import ingest_youtube
 from ingestion.gmail_connector import ingest_gmail
+from ingestion.notion_connector import ingest_notion
 from backend.digest import generate_digest
 from backend.study import generate_flashcards, generate_quiz, generate_summary_notes
 from backend.knowledge_graph import build_graph_data
+from backend.sync_scheduler import (
+    start_scheduler, stop_scheduler,
+    get_sync_status, trigger_manual_sync
+)
 
-from ingestion.notion_connector import ingest_notion
 load_dotenv()
 
 app = FastAPI(title="Personal AI Assistant", version="1.0.0")
@@ -39,6 +42,22 @@ UPLOAD_DIR = os.getenv("DATA_RAW_PATH", "./data/raw")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
+@app.on_event("startup")
+async def startup_event():
+    auto_sync = os.getenv("AUTO_SYNC_ENABLED", "true").lower() == "true"
+    interval = int(os.getenv("AUTO_SYNC_INTERVAL_HOURS", "6"))
+    if auto_sync:
+        start_scheduler(interval_hours=interval)
+        print(f"Auto-sync enabled every {interval} hours")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    stop_scheduler()
+
+
+# ── Health ──────────────────────────────────────────────────────────────────
+
 @app.get("/health", response_model=HealthResponse)
 def health():
     return HealthResponse(
@@ -48,16 +67,20 @@ def health():
         total_documents=total_count()
     )
 
+@app.get("/")
+def root():
+    return {"message": "Personal AI Assistant API is running"}
+
+
+# ── Chat ─────────────────────────────────────────────────────────────────────
 
 @app.post("/chat")
 def chat_endpoint(request: ChatRequest):
     if not is_ollama_running():
         raise HTTPException(status_code=503, detail="Ollama is not running")
-
     start = time.time()
     result = chat(request.message, request.session_id)
     elapsed_ms = int((time.time() - start) * 1000)
-
     log_query(
         query=request.message,
         answer=result.get("answer", ""),
@@ -65,9 +88,10 @@ def chat_endpoint(request: ChatRequest):
         session_id=request.session_id,
         response_time_ms=elapsed_ms
     )
-
     return result
 
+
+# ── Ingest ───────────────────────────────────────────────────────────────────
 
 @app.post("/ingest/file")
 async def ingest_file(file: UploadFile = File(...)):
@@ -83,26 +107,15 @@ async def ingest_file(file: UploadFile = File(...)):
         with open(save_path, "wb") as f:
             f.write(contents)
 
-        print(f"Saved: {save_path}")
-
         chunks = load_file(save_path)
-        print(f"Chunks created: {len(chunks)}")
-
         added = add_chunks(chunks)
-        print(f"Added to DB: {added}")
-
-        # Log ingestion to analytics
         log_ingestion(file.filename, ext.strip('.'), added, "file")
 
-        # Summary — read raw text directly (bypasses dedup)
         try:
             with open(save_path, 'r', encoding='utf-8', errors='ignore') as rf:
                 raw_text = rf.read()
-            print(f"Summarizing {len(raw_text)} chars...")
             summary = summarize_document(raw_text, file.filename)
-            print(f"Summary done: {summary[:60]}")
         except Exception as sum_err:
-            print(f"Summary error: {sum_err}")
             summary = "• Summary unavailable."
 
         return {
@@ -126,12 +139,7 @@ def ingest_url_endpoint(payload: dict):
     chunks, title = ingest_url(url)
     added = add_chunks(chunks)
     log_ingestion(title, "url", added, "webpage")
-    return {
-        "status": "success",
-        "url": url,
-        "title": title,
-        "chunks_added": added
-    }
+    return {"status": "success", "url": url, "title": title, "chunks_added": added}
 
 
 @app.post("/ingest/youtube")
@@ -139,49 +147,29 @@ def ingest_youtube_endpoint(payload: dict):
     url = payload.get("url")
     if not url:
         raise HTTPException(status_code=400, detail="URL required")
-
-    print(f"YouTube ingest: {url}")
     chunks, title = ingest_youtube(url)
-
     added = add_chunks(chunks)
-    print(f"Added to DB: {added}")
-
-    # Summary from first 5 chunks of transcript
     if chunks:
-        transcript_sample = " ".join([c.text for c in chunks[:5]])
-        summary = summarize_document(transcript_sample, title)
+        summary = summarize_document(" ".join([c.text for c in chunks[:5]]), title)
     else:
         summary = "• No transcript available for this video."
-
     log_ingestion(title, "youtube", added, "youtube")
-
     return {
         "status": "success" if added > 0 else "no_transcript",
-        "url": url,
-        "title": title,
-        "chunks_added": added,
-        "summary": summary
+        "url": url, "title": title,
+        "chunks_added": added, "summary": summary
     }
+
 
 @app.post("/ingest/gmail")
 def ingest_gmail_endpoint(payload: dict = {}):
-    """Ingest emails from Gmail."""
     max_emails = payload.get("max_emails", 100)
     days_back = payload.get("days_back", 30)
-
     try:
-        chunks, email_count = ingest_gmail(
-            max_emails=max_emails,
-            days_back=days_back
-        )
+        chunks, email_count = ingest_gmail(max_emails=max_emails, days_back=days_back)
         added = add_chunks(chunks)
         log_ingestion("Gmail", "email", added, "email")
-
-        return {
-            "status": "success",
-            "emails_fetched": email_count,
-            "chunks_added": added
-        }
+        return {"status": "success", "emails_fetched": email_count, "chunks_added": added}
     except FileNotFoundError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -190,20 +178,17 @@ def ingest_gmail_endpoint(payload: dict = {}):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-
 @app.get("/ingest/gmail/status")
 def gmail_status():
-    """Check if Gmail is connected."""
-    import os
     return {
         "credentials_found": os.path.exists("credentials.json"),
         "token_found": os.path.exists("token.json"),
         "connected": os.path.exists("token.json")
     }
 
+
 @app.post("/ingest/notion")
 def ingest_notion_endpoint(payload: dict = {}):
-    """Ingest all Notion pages and databases."""
     page_id = payload.get("page_id", None)
     try:
         chunks, page_count, db_count = ingest_notion(specific_page_id=page_id)
@@ -225,35 +210,23 @@ def ingest_notion_endpoint(payload: dict = {}):
 
 @app.get("/ingest/notion/status")
 def notion_status():
-    """Check if Notion token is configured."""
     token = os.getenv("NOTION_TOKEN")
-    return {
-        "connected": bool(token),
-        "token_set": bool(token)
-    }
-    
+    return {"connected": bool(token), "token_set": bool(token)}
+
+
 @app.post("/ingest/reupload")
 async def reupload_source(source_name: str, file: UploadFile = File(...)):
-    """Delete old source and re-ingest with new file."""
     try:
-        # Delete old chunks
         deleted = delete_source(source_name)
-        print(f"Deleted {deleted} old chunks for: {source_name}")
-
-        # Save new file
         ext = os.path.splitext(file.filename)[1].lower()
         save_path = os.path.join(UPLOAD_DIR, file.filename)
         contents = await file.read()
         with open(save_path, "wb") as f:
             f.write(contents)
 
-        # Clear dedup hash for this file so it re-ingests
         import json
         hash_file = "./data/processed/seen_hashes.json"
         if os.path.exists(hash_file):
-            with open(hash_file, 'r') as hf:
-                hashes = set(json.load(hf))
-            # We can't easily remove specific hashes so just clear all
             os.remove(hash_file)
 
         chunks = load_file(save_path)
@@ -281,20 +254,51 @@ async def reupload_source(source_name: str, file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ── Sync ─────────────────────────────────────────────────────────────────────
+
+@app.get("/sync/status")
+def sync_status():
+    return get_sync_status()
+
+
+@app.post("/sync/trigger")
+def manual_sync():
+    return trigger_manual_sync()
+
+
+@app.post("/sync/start")
+def start_sync(payload: dict = {}):
+    hours = payload.get("interval_hours", 6)
+    start_scheduler(interval_hours=hours)
+    return {"status": "started", "interval_hours": hours}
+
+
+@app.post("/sync/stop")
+def stop_sync():
+    stop_scheduler()
+    return {"status": "stopped"}
+
+
+# ── Analytics ────────────────────────────────────────────────────────────────
+
 @app.get("/analytics")
 def analytics():
     return get_stats()
 
+
+# ── Knowledge Graph ──────────────────────────────────────────────────────────
+
 @app.get("/knowledge-graph")
 def knowledge_graph():
-    """Build and return knowledge graph data."""
     try:
-        data = build_graph_data()
-        return data
+        return build_graph_data()
     except Exception as e:
         import traceback
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Sources ──────────────────────────────────────────────────────────────────
 
 @app.get("/sources")
 def list_sources():
@@ -307,40 +311,35 @@ def remove_source(source_name: str):
     return {"status": "deleted", "chunks_removed": deleted}
 
 
-@app.get("/")
-def root():
-    return {"message": "Personal AI Assistant API is running"}
+# ── Digest ───────────────────────────────────────────────────────────────────
 
 @app.get("/digest")
 def daily_digest():
-    """Generate today's knowledge digest."""
     result = generate_digest()
     if "error" in result:
         raise HTTPException(status_code=503, detail=result["error"])
     return result
 
+
+# ── Study ─────────────────────────────────────────────────────────────────────
+
 @app.post("/study/flashcards")
 def flashcards_endpoint(payload: dict = {}):
-    topic = payload.get("topic", None)
-    count = payload.get("count", 5)
-    cards = generate_flashcards(topic=topic, count=count)
+    cards = generate_flashcards(topic=payload.get("topic"), count=payload.get("count", 5))
     if not cards:
-        raise HTTPException(status_code=404, detail="Could not generate flashcards. Make sure you have documents ingested.")
-    return {"cards": cards, "count": len(cards), "topic": topic}
+        raise HTTPException(status_code=404, detail="Could not generate flashcards.")
+    return {"cards": cards, "count": len(cards), "topic": payload.get("topic")}
 
 
 @app.post("/study/quiz")
 def quiz_endpoint(payload: dict = {}):
-    topic = payload.get("topic", None)
-    count = payload.get("count", 5)
-    questions = generate_quiz(topic=topic, count=count)
+    questions = generate_quiz(topic=payload.get("topic"), count=payload.get("count", 5))
     if not questions:
         raise HTTPException(status_code=404, detail="Could not generate quiz questions.")
-    return {"questions": questions, "count": len(questions), "topic": topic}
+    return {"questions": questions, "count": len(questions), "topic": payload.get("topic")}
 
 
 @app.post("/study/notes")
 def notes_endpoint(payload: dict = {}):
-    source = payload.get("source", None)
-    notes = generate_summary_notes(source_name=source)
-    return {"notes": notes, "source": source}
+    notes = generate_summary_notes(source_name=payload.get("source"))
+    return {"notes": notes, "source": payload.get("source")}
