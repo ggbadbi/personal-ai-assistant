@@ -5,13 +5,21 @@ from dotenv import load_dotenv
 load_dotenv()
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "deepseek-r1:14b")
+FAST_MODEL = os.getenv("FAST_MODEL", "llama3.2:latest")
 EMBED_MODEL = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
 
 
-def ask(prompt: str, context: str, history: list = []) -> str:
-    messages = []
+def ask(prompt: str, context: str, history: list = [],
+        use_fast: bool = False) -> str:
+    """
+    Smart model routing:
+    - Short queries → fast model (llama3.2:3b)
+    - Complex reasoning → deepseek-r1:14b
+    """
+    model = FAST_MODEL if use_fast else OLLAMA_MODEL
 
+    messages = []
     for turn in history[:-2] if len(history) > 2 else []:
         messages.append({"role": turn["role"], "content": turn["content"]})
 
@@ -39,21 +47,37 @@ STRICT RULES:
 
     messages.append({"role": "user", "content": user_message})
 
+    # DeepSeek-R1 uses thinking tokens — strip <think> blocks from output
     try:
         response = httpx.post(
             f"{OLLAMA_URL}/api/chat",
             json={
-                "model": OLLAMA_MODEL,
+                "model": model,
                 "messages": messages,
                 "stream": False,
-                "options": {"temperature": 0.05, "num_predict": 1000}
+                "options": {
+                    "temperature": 0.05,
+                    "num_predict": 1000,
+                    "num_ctx": 4096
+                }
             },
-            timeout=120.0
+            timeout=180.0  # longer timeout for 14b model
         )
         result = response.json()
-        return result["message"]["content"]
+        content = result["message"]["content"]
+
+        # Strip DeepSeek thinking blocks <think>...</think>
+        import re
+        content = re.sub(r'<think>[\s\S]*?</think>', '', content).strip()
+
+        return content
     except Exception as e:
         return f"LLM Error: {str(e)}"
+
+
+def ask_fast(prompt: str, context: str) -> str:
+    """Use fast small model for simple tasks."""
+    return ask(prompt, context, use_fast=True)
 
 
 def get_embedding(text: str) -> list:
@@ -85,6 +109,7 @@ def is_ollama_running() -> bool:
 
 
 def summarize_document(text: str, filename: str) -> str:
+    """Use fast model for summaries."""
     truncated = text[:4000].strip()
     prompt = f"""Read this document and write exactly 3 bullet points summarizing the key information.
 
@@ -98,7 +123,7 @@ Do not write anything else before or after the bullet points."""
         response = httpx.post(
             f"{OLLAMA_URL}/api/generate",
             json={
-                "model": OLLAMA_MODEL,
+                "model": FAST_MODEL,  # use fast model for summaries
                 "prompt": prompt,
                 "stream": False,
                 "options": {"temperature": 0.1, "num_predict": 300}

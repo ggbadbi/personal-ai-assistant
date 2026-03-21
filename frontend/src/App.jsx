@@ -111,7 +111,7 @@ export default function App() {
             </div>
             {!isMobile && (
               <div style={{ fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono' }}>
-                Llama 3.1 · RTX 4080 · 100% local
+                DeepSeek-R1 14B · RTX 4080 · 100% local
               </div>
             )}
           </div>
